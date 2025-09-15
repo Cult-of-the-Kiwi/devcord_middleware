@@ -18,9 +18,9 @@ use crate::models::claims::Claims;
 // FIXME(Sa4dUs): We should definetly extract JWT logic to a external crate
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Authenticated {
-    pub(crate) claims: Claims,
-    pub(crate) jwt: String,
+pub struct Authenticated {
+    pub claims: Claims,
+    pub jwt: String,
 }
 
 static KEYS: LazyLock<DecodingKey> = LazyLock::new(|| {
