@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+axum = { version = "0.8.4", features = ["ws"] }
+axum-extra = { version = "0.10.1", features = ["typed-header"] }
+jsonwebtoken = "9.3.1"
+serde = "1.0.223"
+serde_json = "1.0.145"
