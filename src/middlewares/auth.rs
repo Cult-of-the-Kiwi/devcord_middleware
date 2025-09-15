@@ -1,8 +1,7 @@
 use axum::{
-    Json, RequestExt,
-    body::Body,
-    http::{Request, StatusCode, header},
-    middleware::Next,
+    Json, RequestPartsExt,
+    extract::FromRequestParts,
+    http::{StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
 use axum_extra::{
@@ -29,34 +28,38 @@ static KEYS: LazyLock<DecodingKey> = LazyLock::new(|| {
     DecodingKey::from_secret(secret.as_bytes())
 });
 
-pub async fn require_auth(mut req: Request<Body>, next: Next) -> Result<Response, AuthError> {
-    let jwt = if let Ok(TypedHeader(Authorization(bearer))) = req
-        .extract_parts::<TypedHeader<Authorization<Bearer>>>()
-        .await
-    {
-        Some(bearer.token().to_string())
-    } else if let Some(protocol_header) = req.headers().get(header::SEC_WEBSOCKET_PROTOCOL) {
-        protocol_header
-            .to_str()
-            .ok()
-            .and_then(|protocols| protocols.split(',').map(str::trim).next().map(String::from))
-    } else {
-        None
-    };
+//FIXME(Sa4dus): Do this properly
+impl<S> FromRequestParts<S> for Authenticated
+where
+    S: Send + Sync,
+{
+    type Rejection = AuthError;
 
-    let jwt = jwt.ok_or(AuthError::InvalidToken)?;
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let _ = state;
+        let jwt = if let Ok(TypedHeader(Authorization(bearer))) =
+            parts.extract::<TypedHeader<Authorization<Bearer>>>().await
+        {
+            Some(bearer.token().to_string())
+        } else if let Some(protocol_header) = parts.headers.get(header::SEC_WEBSOCKET_PROTOCOL) {
+            protocol_header
+                .to_str()
+                .ok()
+                .and_then(|protocols| protocols.split(',').map(str::trim).next().map(String::from))
+        } else {
+            None
+        };
 
-    let token_data = decode::<Claims>(&jwt, &KEYS, &Validation::default())
-        .map_err(|_| AuthError::InvalidToken)?;
+        let jwt = jwt.ok_or(AuthError::MissingCredentials)?;
 
-    let authenticated = Authenticated {
-        claims: token_data.claims,
-        jwt,
-    };
+        let token_data = decode::<Claims>(&jwt, &KEYS, &Validation::default())
+            .map_err(|_| AuthError::InvalidToken)?;
 
-    req.extensions_mut().insert(authenticated);
-
-    Ok(next.run(req).await)
+        Ok(Authenticated {
+            claims: token_data.claims,
+            jwt,
+        })
+    }
 }
 
 #[allow(dead_code)]
